@@ -1,0 +1,1 @@
+fpc -FUout -O4 -CfSSE42 -CpCOREI 
