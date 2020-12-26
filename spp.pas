@@ -2,7 +2,7 @@
 {$MODE objfpc}{$H+}
 {$INLINE ON}
 
-uses SysUtils,Classes,uVect,uLib,WriteBMP,Math;
+uses SysUtils,Classes,uVect,uBMP,Math,getopts;
 
 const 
   eps=1e-4;
@@ -76,7 +76,7 @@ begin
   result:=(t<inf);
 END;
 
-function radiance(const r:RayRecord;depth:integer;var Xi:ErandArray):VecRecord;
+function radiance(const r:RayRecord;depth:integer):VecRecord;
 var
   id:integer;
   obj:SphereClass;
@@ -100,8 +100,8 @@ begin
     p:=f.y
   ELSE
     p:=f.z;
-  if (depth>5) then begin
-    if erand48(xi)<p then 
+   if (depth>5) then begin
+    if random<p then 
       f:=f/p 
     else begin
       result:=obj.e;
@@ -110,19 +110,19 @@ begin
   end;
   CASE obj.refl OF
     DIFF:BEGIN
-      r1:=2*PI*erand48(xi);r2:=erand48(xi);r2s:=sqrt(r2);
+      r1:=2*PI*random;r2:=random;r2s:=sqrt(r2);
       w:=nl;
       IF abs(w.x)>0.1 THEN
-        u:=CreateVec(0,1,0) 
+        u:=VecNorm(CreateVec(0,1,0)/w) 
       ELSE BEGIN
         u:=VecNorm(CreateVec(1,0,0)/w );
       END;
       v:=w/u;
       d := VecNorm(u*cos(r1)*r2s + v*sin(r1)*r2s + w*sqrt(1-r2));
-      result:=obj.e+VecMul(f,radiance(CreateRay(x,d),depth,Xi) );
+      result:=obj.e+VecMul(f,radiance(CreateRay(x,d),depth) );
     END;(*DIFF*)
     SPEC:BEGIN
-      result:=obj.e+VecMul(f,(radiance(CreateRay(x,r.d-n*2*(n*r.d) ),depth,Xi)));
+      result:=obj.e+VecMul(f,(radiance(CreateRay(x,r.d-n*2*(n*r.d) ),depth)));
     END;(*SPEC*)
     REFR:BEGIN
       RefRay:=CreateRay(x,r.d-n*2*(n*r.d) );
@@ -130,7 +130,7 @@ begin
       nc:=1;nt:=1.5; if into then nnt:=nc/nt else nnt:=nt/nc; ddn:=r.d*nl; 
       cos2t:=1-nnt*nnt*(1-ddn*ddn);
       if cos2t<0 then begin   // Total internal reflection
-        result:=obj.e + VecMul(f,radiance(RefRay,depth,Xi));
+        result:=obj.e + VecMul(f,radiance(RefRay,depth));
         exit;
       end;
       if into then q:=1 else q:=-1;
@@ -139,13 +139,13 @@ begin
       a:=nt-nc; b:=nt+nc; R0:=a*a/(b*b); c := 1-Q;
       Re:=R0+(1-R0)*c*c*c*c*c;Tr:=1-Re;P:=0.25+0.5*Re;RP:=Re/P;TP:=Tr/(1-P);
       IF depth>2 THEN BEGIN
-        IF erand48(xi)<p then // 反射
-          result:=obj.e+VecMul(f,radiance(RefRay,depth,Xi)*RP)
+        IF random<p then // 反射
+          result:=obj.e+VecMul(f,radiance(RefRay,depth)*RP)
         ELSE //屈折
-          result:=obj.e+VecMul(f,radiance(CreateRay(x,tdir),depth,Xi)*TP);
+          result:=obj.e+VecMul(f,radiance(CreateRay(x,tdir),depth)*TP);
       END
       ELSE BEGIN// 屈折と反射の両方を追跡
-        result:=obj.e+VecMul(f,radiance(RefRay,depth,Xi)*Re+radiance(CreateRay(x,tdir),depth,Xi)*Tr);
+        result:=obj.e+VecMul(f,radiance(RefRay,depth)*Re+radiance(CreateRay(x,tdir),depth)*Tr);
       END;
     END;(*REFR*)
   END;(*CASE*)
@@ -164,15 +164,44 @@ VAR
   BMPClass:BMPIOClass;
   ScrWidth,ScrHeight:integer;
   vColor:rgbColor;
-  FN:string;
-  Xi:ErandArray;
+  ArgInt:integer;
+  FN,ArgFN:string;
+  c:char;
 
 BEGIN
   FN:='temp.bmp';
-  w:=320 ;h:=240;  samps := 64;
+  w:=1024 ;h:=768;  samps := 16;
+  c:=#0;
+  repeat
+    c:=getopt('o:s:w:');
+
+    case c of
+      'o' : BEGIN
+         ArgFN:=OptArg;
+         IF ArgFN<>'' THEN FN:=ArgFN;
+         writeln ('Output FileName =',FN);
+      END;
+      's' : BEGIN
+        ArgInt:=StrToInt(OptArg);
+        samps:=ArgInt;
+        writeln('samples =',ArgInt);
+      END;
+      'w' : BEGIN
+         ArgInt:=StrToInt(OptArg);
+         w:=ArgInt;h:=w *3 div 4;
+         writeln('w=',w,' ,h=',h);
+      END;
+      '?',':' : BEGIN
+         writeln(' -o [finename] output filename');
+         writeln(' -s [samps] sampling count');
+         writeln(' -w [width] screen width pixel');
+      END;
+    end; { case }
+  until c=endofoptions;
   height:=h;
   BMPClass:=BMPIOClass.Create(w,h);
   InitScene;
+  Randomize;
 
   camPosition:=CreateVec(50, 52, 295.6);
   camDirection:=CreateVec(0, -0.042612, -1);
@@ -188,7 +217,6 @@ BEGIN
   Writeln ('The time is : ',TimeToStr(Time));
 
   FOR y := 0 to h-1 DO BEGIN
-    Xi[0] := 0; Xi[1] := 0;  Xi[2] := y * y * y;
     IF y mod 10 =0 then writeln('y=',y);
     FOR x := 0 TO w - 1 DO BEGIN
       r:=CreateVec(0, 0, 0);
@@ -196,13 +224,13 @@ BEGIN
       FOR sy := 0 TO 1 DO BEGIN
         FOR sx := 0 TO 1 DO BEGIN
           FOR s := 0 TO samps - 1 DO BEGIN
-            r1 := 2 * erand48(Xi);
+            r1 := 2 * random;
             IF (r1 < 1) THEN
               dx := sqrt(r1) - 1
             ELSE
               dx := 1 - sqrt(2 - r1);
 
-            r2 := 2 * erand48(Xi);
+            r2 := 2 * random;
             IF (r2 < 1) THEN
               dy := sqrt(r2) - 1
             ELSE
@@ -217,11 +245,11 @@ BEGIN
             tempRay.o:= d* 140;
             tempRay.o:= tempRay.o+ cam.o;
             tempRay.d := d;
-            temp:=Radiance(tempRay, 0,Xi);
+            temp:=Radiance(tempRay, 0);
             temp:= temp/ samps;
             r:= r+temp;
           END;(*samps*)
-          temp:= r* 0.24;
+          temp:= ClampVector(r)* 0.25;
           tColor:=tColor+ temp;
           r:=CreateVec(0, 0, 0);
         END;(*sx*)

@@ -5,7 +5,7 @@
 INTERFACE
 
 USES
-    sysutils,WriteBMP,math;
+    sysutils,uBMP,math;
 TYPE
     RefType=(DIFF,SPEC,REFR);// material types, used in radiance()
 {
@@ -174,7 +174,7 @@ begin
 end;
 function ColToByte(x:real):byte;inline;
 begin
-    result:=trunc(power(clamp(x),1/2.2)*255+0.5);
+    result:=trunc(power(x,1/2.2)*255+0.5);
 end;
 function ColToRGB(v:VecRecord):rgbColor;
 begin
