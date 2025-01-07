@@ -10,19 +10,19 @@ const
 type 
   SphereClass=CLASS
     rad:real;       //radius
-    p,e,c:VecRecord;// position. emission,color
+    p,e,c:Vec3;// position. emission,color
     refl:RefType;
-    constructor Create(rad_:real;p_,e_,c_:VecRecord;refl_:RefType);
+    constructor Create(rad_:real;p_,e_,c_:Vec3;refl_:RefType);
     function intersect(const r:RayRecord):real;
   END;
 
-constructor SphereClass.Create(rad_:real;p_,e_,c_:VecRecord;refl_:RefType);
+constructor SphereClass.Create(rad_:real;p_,e_,c_:Vec3;refl_:RefType);
 begin
   rad:=rad_;p:=p_;e:=e_;c:=c_;refl:=refl_;
 end;
 function SphereClass.intersect(const r:RayRecord):real;
 var
-  op:VecRecord;
+  op:Vec3;
   t,b,det:real;
 begin
   op:=p-r.o;
@@ -47,17 +47,19 @@ end;
 var
   sph:TList;
 procedure InitScene;
+var
+   p,c,e:Vec3;
 begin
   sph:=TList.Create;
-  sph.add( SphereClass.Create(1e5, CreateVec( 1e5+1,40.8,81.6),  ZeroVec,CreateVec(0.75,0.25,0.25),DIFF) );//Left
-  sph.add( SphereClass.Create(1e5, CreateVec(-1e5+99,40.8,81.6), ZeroVec,CreateVec(0.25,0.25,0.75),DIFF) );//Right
-  sph.add( SphereClass.Create(1e5, CreateVec(50,40.8, 1e5),      ZeroVec,CreateVec(0.75,0.75,0.75),DIFF) );//Back
-  sph.add( SphereClass.Create(1e5, CreateVec(50,40.8,-1e5+170),  ZeroVec,CreateVec(0,0,0),      DIFF) );//Front
-  sph.add( SphereClass.Create(1e5, CreateVec(50, 1e5, 81.6),     ZeroVec,CreateVec(0.75,0.75,0.75),DIFF) );//Bottomm
-  sph.add( SphereClass.Create(1e5, CreateVec(50,-1e5+81.6,81.6), ZeroVec,CreateVec(0.75,0.75,0.75),DIFF) );//Top
-  sph.add( SphereClass.Create(16.5,CreateVec(27,16.5,47),        ZeroVec,CreateVec(1,1,1)*0.999, SPEC) );//Mirror
-  sph.add( SphereClass.Create(16.5,CreateVec(73,16.5,88),        ZeroVec,CreateVec(1,1,1)*0.999, REFR) );//Glass
-  sph.add( SphereClass.Create(600, CreateVec(50,681.6-0.27,81.6),CreateVec(12,12,12),    ZeroVec,DIFF) );//Ligth
+  sph.add( SphereClass.Create(1e5, p.new( 1e5+1,40.8,81.6),  ZeroVec,c.new(0.75,0.25,0.25),DIFF) );//Left
+  sph.add( SphereClass.Create(1e5, p.new(-1e5+99,40.8,81.6), ZeroVec,c.new(0.25,0.25,0.75),DIFF) );//Right
+  sph.add( SphereClass.Create(1e5, p.new(50,40.8, 1e5),      ZeroVec,c.new(0.75,0.75,0.75),DIFF) );//Back
+  sph.add( SphereClass.Create(1e5, p.new(50,40.8,-1e5+170),  ZeroVec,c.new(0,0,0),      DIFF) );//Front
+  sph.add( SphereClass.Create(1e5, p.new(50, 1e5, 81.6),     ZeroVec,c.new(0.75,0.75,0.75),DIFF) );//Bottomm
+  sph.add( SphereClass.Create(1e5, p.new(50,-1e5+81.6,81.6), ZeroVec,c.new(0.75,0.75,0.75),DIFF) );//Top
+  sph.add( SphereClass.Create(16.5,p.new(27,16.5,47),        ZeroVec,c.new(1,1,1)*0.999, SPEC) );//Mirror
+  sph.add( SphereClass.Create(16.5,p.new(73,16.5,88),        ZeroVec,c.new(1,1,1)*0.999, REFR) );//Glass
+  sph.add( SphereClass.Create(600, p.new(50,681.6-0.27,81.6),e.new(12,12,12),    ZeroVec,DIFF) );//Ligth
 end;
 
 function intersect(const r:RayRecord;var t:real; var id:integer):boolean;
@@ -76,24 +78,24 @@ begin
   result:=(t<inf);
 END;
 
-function radiance(const r:RayRecord;depth:integer):VecRecord;
+function radiance(const r:RayRecord;depth:integer):Vec3;
 var
   id:integer;
   obj:SphereClass;
-  x,n,f,nl,u,v,w,d:VecRecord;
+  x,n,f,nl,u,v,w,d:Vec3;
   p,r1,r2,r2s,t:real;
   into:boolean;
-  RefRay:RayRecord;
+  ray2,RefRay:RayRecord;
   nc,nt,nnt,ddn,cos2t,q,a,b,c,R0,Re,RP,Tr,TP:real;
-  tDir:VecRecord;
+  tDir:Vec3;
 begin
   id:=0;depth:=depth+1;
   if intersect(r,t,id)=FALSE then begin
     result:=ZeroVec;exit;
   end;
   obj:=SphereClass(sph[id]);
-  x:=r.o+r.d*t; n:=VecNorm(x-obj.p); f:=obj.c;
-  IF VecDot(n,r.d)<0 THEN nl:=n else nl:=n*-1;
+  x:=r.o+r.d*t; n:=(x-obj.p).norm; f:=obj.c;
+  IF n.dot(r.d)<0 THEN nl:=n else nl:=n*-1;
   IF (f.x>f.y)and(f.x>f.z) THEN
     p:=f.x
   ELSE IF f.y>f.z THEN 
@@ -113,39 +115,39 @@ begin
       r1:=2*PI*random;r2:=random;r2s:=sqrt(r2);
       w:=nl;
       IF abs(w.x)>0.1 THEN
-        u:=VecNorm(CreateVec(0,1,0)/w) 
+        u:=(u.new(0,1,0)/w).norm 
       ELSE BEGIN
-        u:=VecNorm(CreateVec(1,0,0)/w );
+        u:=(u.new(1,0,0)/w ).norm;
       END;
       v:=w/u;
-      d := VecNorm(u*cos(r1)*r2s + v*sin(r1)*r2s + w*sqrt(1-r2));
-      result:=obj.e+VecMul(f,radiance(CreateRay(x,d),depth) );
+      d := (u*cos(r1)*r2s + v*sin(r1)*r2s + w*sqrt(1-r2)).norm;
+      result:=obj.e+f.Mult(radiance(ray2.new(x,d),depth) );
     END;(*DIFF*)
     SPEC:BEGIN
-      result:=obj.e+VecMul(f,(radiance(CreateRay(x,r.d-n*2*(n*r.d) ),depth)));
+      result:=obj.e+f.mult(radiance(ray2.new(x,r.d-n*2*(n*r.d) ),depth));
     END;(*SPEC*)
     REFR:BEGIN
-      RefRay:=CreateRay(x,r.d-n*2*(n*r.d) );
+      RefRay.new(x,r.d-n*2*(n*r.d) );
       into:= (n*nl>0);
       nc:=1;nt:=1.5; if into then nnt:=nc/nt else nnt:=nt/nc; ddn:=r.d*nl; 
       cos2t:=1-nnt*nnt*(1-ddn*ddn);
       if cos2t<0 then begin   // Total internal reflection
-        result:=obj.e + VecMul(f,radiance(RefRay,depth));
+        result:=obj.e + f.mult(radiance(RefRay,depth));
         exit;
       end;
       if into then q:=1 else q:=-1;
-      tdir := VecNorm(r.d*nnt - n*(q*(ddn*nnt+sqrt(cos2t))));
+      tdir := (r.d*nnt - n*(q*(ddn*nnt+sqrt(cos2t)))).norm;
       IF into then Q:=-ddn else Q:=tdir*n;
       a:=nt-nc; b:=nt+nc; R0:=a*a/(b*b); c := 1-Q;
       Re:=R0+(1-R0)*c*c*c*c*c;Tr:=1-Re;P:=0.25+0.5*Re;RP:=Re/P;TP:=Tr/(1-P);
       IF depth>2 THEN BEGIN
         IF random<p then // 反射
-          result:=obj.e+VecMul(f,radiance(RefRay,depth)*RP)
+          result:=obj.e+f.mult(radiance(RefRay,depth)*RP)
         ELSE //屈折
-          result:=obj.e+VecMul(f,radiance(CreateRay(x,tdir),depth)*TP);
+          result:=obj.e+f.mult(radiance(ray2.new(x,tdir),depth)*TP);
       END
       ELSE BEGIN// 屈折と反射の両方を追跡
-        result:=obj.e+VecMul(f,radiance(RefRay,depth)*Re+radiance(CreateRay(x,tdir),depth)*Tr);
+        result:=obj.e+f.mult(radiance(RefRay,depth)*Re+radiance(ray2.new(x,tdir),depth)*Tr);
       END;
     END;(*REFR*)
   END;(*CASE*)
@@ -155,13 +157,13 @@ end;
 VAR
   x,y,sx,sy,i,s: INTEGER;
   w,h,samps,height    : INTEGER;
-  temp,d       : VecRecord;
+  temp,d       : Vec3;
   r1,r2,dx,dy  : real;
   cam,tempRay  : RayRecord;
-  cx,cy: VecRecord;
-  tColor,r,camPosition,camDirection : VecRecord;
+  cx,cy: Vec3;
+  tColor,r,camPosition,camDirection : Vec3;
 
-  BMPClass:BMPIOClass;
+  BMP:BMPRecord;
   ScrWidth,ScrHeight:integer;
   vColor:rgbColor;
   ArgInt:integer;
@@ -199,17 +201,17 @@ BEGIN
     end; { case }
   until c=endofoptions;
   height:=h;
-  BMPClass:=BMPIOClass.Create(w,h);
+  BMP.new(w,h);
   InitScene;
   Randomize;
 
-  camPosition:=CreateVec(50, 52, 295.6);
-  camDirection:=CreateVec(0, -0.042612, -1);
-  camDirection:=VecNorm( camDirection);
-  cam:=CreateRay(camPosition, camDirection);
-  cx:=CreateVec(w * 0.5135 / h, 0, 0);
+  camPosition.new(50, 52, 295.6);
+  camDirection.new(0, -0.042612, -1);
+  camDirection:=camDirection.norm;
+  cam.new(camPosition, camDirection);
+  cx.new(w * 0.5135 / h, 0, 0);
   cy:= cx/ cam.d;
-  cy:=VecNorm(cy);
+  cy:= cy.norm;
   cy:= cy* 0.5135;
 
   ScrWidth:=0;
@@ -219,7 +221,7 @@ BEGIN
   FOR y := 0 to h-1 DO BEGIN
     IF y mod 10 =0 then writeln('y=',y);
     FOR x := 0 TO w - 1 DO BEGIN
-      r:=CreateVec(0, 0, 0);
+      r:=ZeroVec;
       tColor:=ZeroVec;
       FOR sy := 0 TO 1 DO BEGIN
         FOR sx := 0 TO 1 DO BEGIN
@@ -241,9 +243,8 @@ BEGIN
             d:= d +temp;
             d:= d +cam.d;
 
-            d:=VecNorm(d);
-            tempRay.o:= d* 140;
-            tempRay.o:= tempRay.o+ cam.o;
+            d:=d.norm;
+            tempRay.o:= d* 140+cam.o;
             tempRay.d := d;
             temp:=Radiance(tempRay, 0);
             temp:= temp/ samps;
@@ -251,13 +252,13 @@ BEGIN
           END;(*samps*)
           temp:= ClampVector(r)* 0.25;
           tColor:=tColor+ temp;
-          r:=CreateVec(0, 0, 0);
+          r:=ZeroVec;
         END;(*sx*)
       END;(*sy*)
       vColor:=ColToRGB(tColor);
-      BMPClass.SetPixel(x,height-y,vColor);
+      BMP.SetPixel(x,height-y,vColor);
     END;(* for x *)
   END;(*for y*)
   Writeln ('The time is : ',TimeToStr(Time));
-  BMPClass.WriteBMPFile(FN);
+  BMP.WriteBMPFile(FN);
 END.

@@ -1,28 +1,30 @@
-UNIT uBMP;
+unit uBMP;
 {$MODE objfpc}{$H+}
-INTERFACE
-Uses Classes,SysUtils;
+{$modeswitch advancedrecords}
+interface
+uses SysUtils;
 
-CONST
+const
     MaxArrayNum=1024*1024*2*2;
     AllocMemSize=1024*1024*3+5120;
 
-TYPE
+type
     rgbColor=record b,g,r:byte; end;
 
-    BMPArray=ARRAY[0..MaxArrayNum*3] OF BYTE;
-    BMPIOClass=Class
+    BMPArray=array[0..MaxArrayNum*3] of byte;
+    BMPRecord=record
       bmpBodySize:longint;
       BMPWidth,BMPHeight:longint;
       bmpfileheader : packed array[0..14-1] of byte;
       bmpinfoheader : packed array[0..40-1] of byte;
       bmpBody:BMPArray;
-      constructor Create(x,y:integer);virtual;
+      procedure New(x,y:integer);
       procedure SetPixel(x,y:integer;col:rgbColor);
       procedure WriteBMPFile(FN:string);
+      procedure WritePPM(FN:String);
     end;
-IMPLEMENTATION
-constructor BMPIOClass.Create(x,y:longint);
+implementation
+procedure BMPRecord.new(x,y:longint);
 var
   headersize, bfSize : longint;
   bits_per_pixel, cmap_entries : integer;
@@ -80,7 +82,7 @@ begin
 
 end;
 
-procedure BMPIOClass.SetPixel(x,y:integer;col:rgbColor);
+procedure BMPRecord.SetPixel(x,y:integer;col:rgbColor);
 begin
    bmpBody[(y*BMPWidth+x)*3  ]:=col.b;
    bmpBody[(y*BMPWidth+x)*3+1]:=col.g;
@@ -88,7 +90,7 @@ begin
 
 end;
 
-procedure BMPIOClass.WriteBMPFile(FN:string);
+procedure BMPRecord.WriteBMPFile(FN:string);
 var
    B : file;
 begin
@@ -99,37 +101,23 @@ begin
     Close(b);
 end;
 
-
-BEGIN
-END.
-{ test code
-
+procedure BMPRecord.WritePPM(FN:string);
 var
-   BMPIO : BMPIOClass;
-   Vcolor : rgbColor;
-   yAxis,xAxis: integer;
+   f:text;
+   x,y:integer;
 begin
-   Vcolor.r:=$FF;Vcolor.g:=$0;Vcolor.b:=0;
-   BMPIO:=BMPIOClass.Create(512,512);
-   for yAxis:=0 to BMPIO.bmpHeight-1 do
-      for xAxis:=0 to BMPIO.bmpWidth-1 do begin
-	 vColor.r:= round( (yAxis/BMPIO.bmpWidth) *255);
-	 vColor.g:=round((xAxis/BMPIO.bmpHeight)*255);
-         vColor.b:=128;
-         BMPIO.SetPixel(xAxis,yAxis,vColor);
+   assign(f,FN);rewrite(f);
+   SetTextLineEnding(f,#10);
+   writeln(f, 'P3');
+   writeln(f,bmpWidth,' ',bmpHeight);
+   writeln(f,255);
+   for y:=bmpHeight-1 downto 0 do begin
+      for x:=0 to bmpWidth-1 do begin
+         writeln(f,bmpBody[(y*bmpWidth+x)*3+2],' ',bmpBody[(y*bmpWidth+x)*3+1],' ',bmpBody[(y*bmpWidth+x)*3]);
       end;
-    BMPIO.WriteBMPFile('test.bmp');
-end.
-//$Log: WriteBMP.pas,v $
-//Revision 1.3  2017/08/27 06:30:43  average
-//上下反転にした
-//
-//Revision 1.2  2017/08/26 14:50:31  average
-//Unixのビットマップと違うみたいなので、上下を反転
-//
-//Revision 1.1  2016/11/22 16:03:11  average
-//Initial revision
-//
+   end;
+   close(f);
+end;
 
-//
-}
+begin
+end.
