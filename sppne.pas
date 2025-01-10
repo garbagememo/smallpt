@@ -334,6 +334,132 @@ begin
 end;
 
 
+function radiance_ne_rev(r:RayRecord;depth:integer;E:integer):Vec3;
+var
+  id,i,tid:integer;
+  obj,s:SphereClass;
+  x,n,f,nl,u,v,w,d:Vec3;
+  p,r1,r2,r2s,t,m1,ss,cc:real;
+  into:boolean;
+  Ray2,RefRay:RayRecord;
+  nc,nt,nnt,ddn,cos2t,q,a,b,c,R0,Re,RP,Tr,TP:real;
+  tDir:Vec3;
+  EL,sw,su,sv,l,tw,tu,tv:Vec3;
+  cos_a_max,eps1,eps2,eps2s,cos_a,sin_a,phi,omega:real;
+  cl,cf:Vec3;
+begin
+  id:=0;depth:=depth+1;
+  if intersect(r,t,id)=FALSE then begin
+    result:=ZeroVec;exit;
+  end;
+  obj:=SphereClass(sph[id]);
+  x:=r.o+r.d*t; n:=(x-obj.p).norm; f:=obj.c;
+  IF n.dot(r.d)<0 THEN nl:=n else nl:=n*-1;
+  IF (f.x>f.y)and(f.x>f.z) THEN
+    p:=f.x
+  ELSE IF f.y>f.z THEN 
+    p:=f.y
+  ELSE
+    p:=f.z;
+   if (depth>5) then begin
+    if random<p then 
+      f:=f/p 
+    else begin
+      result:=obj.e;
+      exit;
+    end;
+  end;
+  CASE obj.refl OF
+    DIFF:BEGIN
+      r1:=2*PI*random;r2:=random;r2s:=sqrt(r2);
+      w:=nl;
+      IF abs(w.x)>0.1 THEN
+        u:=(u.new(0,1,0)/w).norm 
+      ELSE BEGIN
+        u:=(u.new(1,0,0)/w ).norm;
+      END;
+      v:=w/u;
+      d := (u*cos(r1)*r2s + v*sin(r1)*r2s + w*sqrt(1-r2)).norm;
+        // Loop over any lights
+        EL:=ZeroVec;
+        tid:=id;
+        for i:=0 to sph.count-1 do begin
+          s:=SphereClass(sph[i]);
+          if (i=tid) then begin
+            continue;
+          end;
+          if (s.e.x<=0) and  (s.e.y<=0) and (s.e.z<=0)  then continue; // skip non-lights
+          sw:=s.p-x;
+          tr:=sw*sw;  tr:=s.rad*s.rad/tr;
+          if abs(sw.x)/sqrt(tr)>0.1 then 
+            su:=(su.new(0,1,0)/sw).norm 
+          else 
+            su:=(su.new(1,0,0)/sw).norm;
+          sv:=sw/su;
+          if tr>1 then begin
+            (*半球の内外=cos_aがマイナスとsin_aが＋、－で場合分け*)
+            (*半球内部なら乱反射した寄与全てを取ればよい・・はず*)
+            eps1:=M_2PI*random;eps2:=random;eps2s:=sqrt(eps2);
+            sincos(eps1,ss,cc);
+            tu:=u*(cc*eps2s);tu:=tu+v*(ss*eps2s);tu:=tu+w*sqrt(1-eps2);
+            l:=tu.norm;
+             if intersect(Ray2.new(x,l),t,id) then begin
+                if id=i then begin
+                   tr:=l*nl;
+                   EL:=EL+f.mult(s.e*tr);
+                end;
+             end;
+          end
+          else begin //半球外部の場合;
+            cos_a_max := sqrt(1-tr );
+            eps1 := random; eps2:=random;
+            cos_a := 1-eps1+eps1*cos_a_max;
+            sin_a := sqrt(1-cos_a*cos_a);
+            if (1-2*random)<0 then sin_a:=-sin_a; 
+            phi := M_2PI*eps2;
+            l:=(sw*(cos(phi)*sin_a)+sv*(sin(phi)*sin_a)+sw*cos_a).norm;
+            if (intersect(Ray2.new(x,l), t, id) ) then begin 
+              if id=i then begin  // shadow ray
+                omega := 2*PI*(1-cos_a_max);
+                tr:=l*nl;
+                if tr<0 then tr:=0;
+                EL:=EL+f.mult(s.e*tr*omega)*M_1_PI;// 1/pi for brdf
+              end;
+            end;
+          end;
+        end;(*for*)
+      result:=obj.e*E+EL+f.Mult(radiance_ne_rev(ray2.new(x,d),depth,0) );
+    END;(*DIFF*)
+    SPEC:BEGIN
+      result:=obj.e+f.mult(radiance_ne_rev(ray2.new(x,r.d-n*2*(n*r.d) ),depth,1));
+    END;(*SPEC*)
+    REFR:BEGIN
+      RefRay.new(x,r.d-n*2*(n*r.d) );
+      into:= (n*nl>0);
+      nc:=1;nt:=1.5; if into then nnt:=nc/nt else nnt:=nt/nc; ddn:=r.d*nl; 
+      cos2t:=1-nnt*nnt*(1-ddn*ddn);
+      if cos2t<0 then begin   // Total internal reflection
+        result:=obj.e + f.mult(radiance_ne_rev(RefRay,depth,1));
+        exit;
+      end;
+      if into then q:=1 else q:=-1;
+      tdir := (r.d*nnt - n*(q*(ddn*nnt+sqrt(cos2t)))).norm;
+      IF into then Q:=-ddn else Q:=tdir*n;
+      a:=nt-nc; b:=nt+nc; R0:=a*a/(b*b); c := 1-Q;
+      Re:=R0+(1-R0)*c*c*c*c*c;Tr:=1-Re;P:=0.25+0.5*Re;RP:=Re/P;TP:=Tr/(1-P);
+      IF depth>2 THEN BEGIN
+        IF random<p then // 反射
+          result:=obj.e+f.mult(radiance_ne_rev(RefRay,depth,1)*RP)
+        ELSE //屈折
+          result:=obj.e+f.mult(radiance_ne_rev(ray2.new(x,tdir),depth,1)*TP);
+      END
+      ELSE BEGIN// 屈折と反射の両方を追跡
+        result:=obj.e+f.mult(radiance_ne_rev(RefRay,depth,1)*Re+radiance_ne_rev(ray2.new(x,tdir),depth,1)*Tr);
+      END;
+    END;(*REFR*)
+  END;(*CASE*)
+end;
+
 
 VAR
   x,y,sx,sy,i,s: INTEGER;
@@ -427,7 +553,7 @@ BEGIN
             d:=d.norm;
             tempRay.o:= d* 140+cam.o;
             tempRay.d := d;
-            temp:=Radiance_ne(tempRay, 0,1);
+            temp:=Radiance_ne_rev(tempRay, 0,1);
             temp:= temp/ samps;
             r:= r+temp;
           END;(*samps*)
