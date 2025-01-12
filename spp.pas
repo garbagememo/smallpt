@@ -1,4 +1,4 @@
-﻿program smallpt;
+program smallpt;
 {$MODE objfpc}{$H+}
 {$INLINE ON}
 {$modeswitch advancedrecords}
@@ -9,13 +9,13 @@ const
   eps=1e-4;
   INF=1e20;
 type 
-  SphereClass=CLASS
+  SphereClass=class
     rad:real;       //radius
     p,e,c:Vec3;// position. emission,color
     refl:RefType;
     constructor Create(rad_:real;p_,e_,c_:Vec3;refl_:RefType);
     function intersect(const r:RayRecord):real;
-  END;
+  end;
 
   CamRecord=record
     o,d:Vec3;
@@ -71,21 +71,21 @@ var
 begin
   op:=p-r.o;
   t:=eps;b:=op*r.d;det:=b*b-op*op+rad*rad;
-  IF det<0 THEN 
+  if det<0 then 
     result:=INF
-  ELSE BEGIN
+  else begin
     det:=sqrt(det);
     t:=b-det;
-    IF t>eps then 
+    if t>eps then 
       result:=t
-    ELSE BEGIN
+    else begin
       t:=b+det;
       if t>eps then 
         result:=t
       else
         result:=INF;
-    END;
-  END;
+    end;
+  end;
 end;
 
 var
@@ -114,13 +114,13 @@ begin
   t:=INF;
   for i:=0 to sph.count-1 do begin
     d:=SphereClass(sph[i]).intersect(r);
-    if d<t THEN BEGIN
+    if d<t then begin
       t:=d;
       id:=i;
-    END;
+    end;
   end;
   result:=(t<inf);
-END;
+end;
 
 function radiance(const r:RayRecord;depth:integer):Vec3;
 var
@@ -134,17 +134,17 @@ var
   tDir:Vec3;
 begin
   id:=0;depth:=depth+1;
-  if intersect(r,t,id)=FALSE then begin
+  if intersect(r,t,id)=false then begin
     result:=ZeroVec;exit;
   end;
   obj:=SphereClass(sph[id]);
   x:=r.o+r.d*t; n:=(x-obj.p).norm; f:=obj.c;
-  IF n.dot(r.d)<0 THEN nl:=n else nl:=n*-1;
-  IF (f.x>f.y)and(f.x>f.z) THEN
+  if n.dot(r.d)<0 then nl:=n else nl:=n*-1;
+  if (f.x>f.y)and(f.x>f.z) then
     p:=f.x
-  ELSE IF f.y>f.z THEN 
+  else if f.y>f.z then 
     p:=f.y
-  ELSE
+  else
     p:=f.z;
    if (depth>5) then begin
     if random<p then 
@@ -154,23 +154,23 @@ begin
       exit;
     end;
   end;
-  CASE obj.refl OF
-    DIFF:BEGIN
+  case obj.refl of
+    DIFF:begin
       r1:=2*PI*random;r2:=random;r2s:=sqrt(r2);
       w:=nl;
-      IF abs(w.x)>0.1 THEN
+      if abs(w.x)>0.1 then
         u:=(u.new(0,1,0)/w).norm 
-      ELSE BEGIN
+      else begin
         u:=(u.new(1,0,0)/w ).norm;
-      END;
+      end;
       v:=w/u;
       d := (u*cos(r1)*r2s + v*sin(r1)*r2s + w*sqrt(1-r2)).norm;
       result:=obj.e+f.Mult(radiance(ray2.new(x,d),depth) );
-    END;(*DIFF*)
-    SPEC:BEGIN
+    end;(*DIFF*)
+    SPEC:begin
       result:=obj.e+f.mult(radiance(ray2.new(x,r.d-n*2*(n*r.d) ),depth));
-    END;(*SPEC*)
-    REFR:BEGIN
+    end;(*SPEC*)
+    REFR:begin
       RefRay.new(x,r.d-n*2*(n*r.d) );
       into:= (n*nl>0);
       nc:=1;nt:=1.5; if into then nnt:=nc/nt else nnt:=nt/nc; ddn:=r.d*nl; 
@@ -181,43 +181,39 @@ begin
       end;
       if into then q:=1 else q:=-1;
       tdir := (r.d*nnt - n*(q*(ddn*nnt+sqrt(cos2t)))).norm;
-      IF into then Q:=-ddn else Q:=tdir*n;
+      if into then Q:=-ddn else Q:=tdir*n;
       a:=nt-nc; b:=nt+nc; R0:=a*a/(b*b); c := 1-Q;
       Re:=R0+(1-R0)*c*c*c*c*c;Tr:=1-Re;P:=0.25+0.5*Re;RP:=Re/P;TP:=Tr/(1-P);
-      IF depth>2 THEN BEGIN
-        IF random<p then // 反射
+      if depth>2 then begin
+        if random<p then // 反射
           result:=obj.e+f.mult(radiance(RefRay,depth)*RP)
-        ELSE //屈折
+        else //屈折
           result:=obj.e+f.mult(radiance(ray2.new(x,tdir),depth)*TP);
-      END
-      ELSE BEGIN// 屈折と反射の両方を追跡
+      end
+      else begin// 屈折と反射の両方を追跡
         result:=obj.e+f.mult(radiance(RefRay,depth)*Re+radiance(ray2.new(x,tdir),depth)*Tr);
-      END;
-    END;(*REFR*)
-  END;(*CASE*)
+      end;
+    end;(*REFR*)
+  end;(*CASE*)
 end;
 
 
 
 
-VAR
-  x,y,sx,sy,i,s: INTEGER;
-  w,h,samps,height    : INTEGER;
-  temp,d       : Vec3;
-  r1,r2,dx,dy  : real;
-  tempRay  : RayRecord;
+var
+  x,y,sx,sy,s: integer;
+  w,h,samps: integer;
+  temp       : Vec3;
   cam:CamRecord;
-  cx,cy: Vec3;
   tColor,r,camPosition,camDirection : Vec3;
 
   BMP:BMPRecord;
-  ScrWidth,ScrHeight:integer;
   vColor:rgbColor;
   ArgInt:integer;
   FN,ArgFN:string;
   c:char;
 
-BEGIN
+begin
   FN:='temp.bmp';
   w:=1024 ;h:=768;  samps := 16;
   c:=#0;
@@ -225,29 +221,29 @@ BEGIN
     c:=getopt('o:s:w:');
 
     case c of
-      'o' : BEGIN
+      'o' : begin
          ArgFN:=OptArg;
-         IF ArgFN<>'' THEN FN:=ArgFN;
+         if ArgFN<>'' then FN:=ArgFN;
          writeln ('Output FileName =',FN);
-      END;
-      's' : BEGIN
+      end;
+      's' : begin
         ArgInt:=StrToInt(OptArg);
         samps:=ArgInt;
         writeln('samples =',ArgInt);
-      END;
-      'w' : BEGIN
+      end;
+      'w' : begin
          ArgInt:=StrToInt(OptArg);
          w:=ArgInt;h:=w *3 div 4;
          writeln('w=',w,' ,h=',h);
-      END;
-      '?',':' : BEGIN
+      end;
+      '?',':' : begin
          writeln(' -o [finename] output filename');
          writeln(' -s [samps] sampling count');
          writeln(' -w [width] screen width pixel');
-      END;
+      end;
     end; { case }
   until c=endofoptions;
-  height:=h;
+
   BMP.new(w,h);
   InitScene;
   Randomize;
@@ -255,29 +251,27 @@ BEGIN
   cam.new( camPosition.new(50, 52, 295.6),
            camDirection.new(0, -0.042612, -1).norm,
            w,h);
-  Writeln ('The time is : ',TimeToStr(Time));
+  writeln ('The time is : ',TimeToStr(Time));
 
-  FOR y := 0 to h-1 DO BEGIN
-    IF y mod 10 =0 then writeln('y=',y);
-    FOR x := 0 TO w - 1 DO BEGIN
+  for y := 0 to h-1 do begin
+    if y mod 10 =0 then writeln('y=',y);
+    for x := 0 to w - 1 do begin
       r:=ZeroVec;
       tColor:=ZeroVec;
-      FOR sy := 0 TO 1 DO BEGIN
-        FOR sx := 0 TO 1 DO BEGIN
-          FOR s := 0 TO samps - 1 DO BEGIN
-            temp:=Radiance(cam.GetRay(x,y,sx,sy), 0);
-            temp:= temp/ samps;
-            r:= r+temp;
-          END;(*samps*)
+      for sy := 0 to 1 do begin
+        for sx := 0 to 1 do begin
+          for s := 0 to samps - 1 do begin
+            r:=r+Radiance(cam.GetRay(x,y,sx,sy), 0)/samps;
+          end;(*samps*)
           temp:= ClampVector(r)* 0.25;
           tColor:=tColor+ temp;
           r:=ZeroVec;
-        END;(*sx*)
-      END;(*sy*)
+        end;(*sx*)
+      end;(*sy*)
       vColor:=ColToRGB(tColor);
-      BMP.SetPixel(x,height-y,vColor);
-    END;(* for x *)
-  END;(*for y*)
-  Writeln ('The time is : ',TimeToStr(Time));
+      BMP.SetPixel(x,h-y,vColor);
+    end;(* for x *)
+  end;(*for y*)
+  writeln ('The time is : ',TimeToStr(Time));
   BMP.WriteBMPFile(FN);
-END.
+end.
