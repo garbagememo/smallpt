@@ -18,7 +18,7 @@ type
       bmpfileheader : packed array[0..14-1] of byte;
       bmpinfoheader : packed array[0..40-1] of byte;
       bmpBody:BMPArray;
-      procedure New(x,y:integer);
+      procedure new(x,y:integer);
       procedure SetPixel(x,y:integer;col:rgbColor);
       procedure WriteBMPFile(FN:string);
       procedure WritePPM(FN:String);

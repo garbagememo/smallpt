@@ -1,6 +1,7 @@
 ﻿program smallpt;
 {$MODE objfpc}{$H+}
 {$INLINE ON}
+{$modeswitch advancedrecords}
 
 uses SysUtils,Classes,uVect,uBMP,Math,getopts;
 
@@ -15,6 +16,49 @@ type
     constructor Create(rad_:real;p_,e_,c_:Vec3;refl_:RefType);
     function intersect(const r:RayRecord):real;
   END;
+
+  CamRecord=record
+    o,d:Vec3;
+    PlaneDist:real;
+    w,h:integer;
+    cx,cy:Vec3;
+    function new(o_,d_:Vec3;w_,h_:integer):CamRecord;
+    function GetRay(x,y,sx,sy:integer):RayRecord;
+  end;
+   
+
+function CamRecord.new(o_,d_:Vec3;w_,h_:integer):CamRecord;
+begin
+  o:=o_;d:=d_;w:=w_;h:=h_;
+  cx.new(w * 0.5135 / h, 0, 0);
+  cy:= (cx/ d).norm* 0.5135;
+
+  result:=self;
+
+end;
+
+function CamRecord.GetRay(x,y,sx,sy:integer):RayRecord;
+var
+   r1,r2,dx,dy,temp:real;
+   dirct:Vec3;
+begin
+   r1 := 2 * random;
+   if (r1 < 1) then
+      dx := sqrt(r1) - 1
+   else
+      dx := 1 - sqrt(2 - r1);
+   r2 := 2 * random;
+   if (r2 < 1) then
+      dy := sqrt(r2) - 1
+   else
+      dy := 1 - sqrt(2 - r2);
+   dirct:= cy* (((sy + 0.5 + dy) / 2 + (h - y - 1)) / h - 0.5)
+      +cx* (((sx + 0.5 + dx) / 2 + x) / w - 0.5)
+      +d;
+   dirct:=dirct.norm;
+   result.o:= dirct* 140+o;
+   result.d := dirct;
+end;
 
 constructor SphereClass.Create(rad_:real;p_,e_,c_:Vec3;refl_:RefType);
 begin
@@ -154,12 +198,15 @@ begin
 end;
 
 
+
+
 VAR
   x,y,sx,sy,i,s: INTEGER;
   w,h,samps,height    : INTEGER;
   temp,d       : Vec3;
   r1,r2,dx,dy  : real;
-  cam,tempRay  : RayRecord;
+  tempRay  : RayRecord;
+  cam:CamRecord;
   cx,cy: Vec3;
   tColor,r,camPosition,camDirection : Vec3;
 
@@ -205,17 +252,9 @@ BEGIN
   InitScene;
   Randomize;
 
-  camPosition.new(50, 52, 295.6);
-  camDirection.new(0, -0.042612, -1);
-  camDirection:=camDirection.norm;
-  cam.new(camPosition, camDirection);
-  cx.new(w * 0.5135 / h, 0, 0);
-  cy:= cx/ cam.d;
-  cy:= cy.norm;
-  cy:= cy* 0.5135;
-
-  ScrWidth:=0;
-  ScrHeight:=0;
+  cam.new( camPosition.new(50, 52, 295.6),
+           camDirection.new(0, -0.042612, -1).norm,
+           w,h);
   Writeln ('The time is : ',TimeToStr(Time));
 
   FOR y := 0 to h-1 DO BEGIN
@@ -226,27 +265,7 @@ BEGIN
       FOR sy := 0 TO 1 DO BEGIN
         FOR sx := 0 TO 1 DO BEGIN
           FOR s := 0 TO samps - 1 DO BEGIN
-            r1 := 2 * random;
-            IF (r1 < 1) THEN
-              dx := sqrt(r1) - 1
-            ELSE
-              dx := 1 - sqrt(2 - r1);
-
-            r2 := 2 * random;
-            IF (r2 < 1) THEN
-              dy := sqrt(r2) - 1
-            ELSE
-              dy := 1 - sqrt(2 - r2);
-
-            temp:= cx* (((sx + 0.5 + dx) / 2 + x) / w - 0.5);
-            d:= cy* (((sy + 0.5 + dy) / 2 + (h - y - 1)) / h - 0.5);
-            d:= d +temp;
-            d:= d +cam.d;
-
-            d:=d.norm;
-            tempRay.o:= d* 140+cam.o;
-            tempRay.d := d;
-            temp:=Radiance(tempRay, 0);
+            temp:=Radiance(cam.GetRay(x,y,sx,sy), 0);
             temp:= temp/ samps;
             r:= r+temp;
           END;(*samps*)
