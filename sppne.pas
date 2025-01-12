@@ -1,6 +1,7 @@
 ﻿program smallpt;
 {$MODE objfpc}{$H+}
 {$INLINE ON}
+{$modeswitch advancedrecords}
 
 uses SysUtils,Classes,uVect,uBMP,Math,getopts;
 
@@ -17,6 +18,48 @@ type
     constructor Create(rad_:real;p_,e_,c_:Vec3;refl_:RefType);
     function intersect(const r:RayRecord):real;
   END;
+  CamRecord=record
+    o,d:Vec3;
+    PlaneDist:real;
+    w,h:integer;
+    cx,cy:Vec3;
+    function new(o_,d_:Vec3;w_,h_:integer):CamRecord;
+    function GetRay(x,y,sx,sy:integer):RayRecord;
+  end;
+   
+
+function CamRecord.new(o_,d_:Vec3;w_,h_:integer):CamRecord;
+begin
+  o:=o_;d:=d_;w:=w_;h:=h_;
+  cx.new(w * 0.5135 / h, 0, 0);
+  cy:= (cx/ d).norm* 0.5135;
+
+  result:=self;
+
+end;
+
+function CamRecord.GetRay(x,y,sx,sy:integer):RayRecord;
+var
+   r1,r2,dx,dy,temp:real;
+   dirct:Vec3;
+begin
+   r1 := 2 * random;
+   if (r1 < 1) then
+      dx := sqrt(r1) - 1
+   else
+      dx := 1 - sqrt(2 - r1);
+   r2 := 2 * random;
+   if (r2 < 1) then
+      dy := sqrt(r2) - 1
+   else
+      dy := 1 - sqrt(2 - r2);
+   dirct:= cy* (((sy + 0.5 + dy) / 2 + (h - y - 1)) / h - 0.5)
+      +cx* (((sx + 0.5 + dx) / 2 + x) / w - 0.5)
+      +d;
+   dirct:=dirct.norm;
+   result.o:= dirct* 140+o;
+   result.d := dirct;
+end;
 
 constructor SphereClass.Create(rad_:real;p_,e_,c_:Vec3;refl_:RefType);
 begin
@@ -79,6 +122,28 @@ begin
   sph.add( SphereClass.Create(16.5,p.new(73,16.5,88),        ZeroVec,c.new(1,1,1)*0.999,   REFR) );//Glass
   sph.add( SphereClass.Create( 1.5,p.new(50,81.6-16.5,81.6), e.new(4,4,4)*100,   ZeroVec,  DIFF) );//Ligth
 end;
+
+procedure  SkyScene;
+var
+   Cen,p,e,c:Vec3;
+   vp,vc,vd:Vec3;
+begin
+  sph:=TList.Create;
+  Cen.new(50,40.8,-860);
+
+  sph.add(SphereClass.Create(1600,      p.new(1,0,2)*3000,   e.new(1,0.9,0.8)*1.2e1*1.56*2,  ZeroVec, DIFF)); // sun
+  sph.add(SphereClass.Create(1560,      p.new(1,0,2)*3500,   e.new(1,0.5,0.05)*4.8e1*1.56*2, ZeroVec,  DIFF) ); // horizon sun2
+  sph.add(SphereClass.Create(10000, Cen+p.new(0,0,-200),     e.new(0.00063842, 0.02001478, 0.28923243)*6e-2*8, c.new(0.7,0.7,1)*0.25,  DIFF)); // sky
+
+  sph.add(SphereClass.Create(100000,    p.new(50, -100000, 0),ZeroVec,c.new(0.3,0.3,0.3),DIFF)); // grnd
+  sph.add(SphereClass.Create(110000,    p.new(50, -110048.5, 0),e.new(0.9,0.5,0.05)*4,ZeroVec,DIFF));// horizon brightener
+  sph.add(SphereClass.Create(4e4,       p.new(50, -4e4-30, -3000),ZeroVec,c.new(0.2,0.2,0.2),DIFF));// mountains
+
+  sph.add(SphereClass.Create(26.5,p.new(22,26.5,42),ZeroVec,c.new(1,1,1)*0.596, SPEC)); // white Mirr
+  sph.add(SphereClass.Create(13,p.new(75,13,82),ZeroVec,c.new(0.96,0.96,0.96)*0.96, REFR));// Glas
+  sph.add(SphereClass.Create(22,p.new(87,22,24),ZeroVec,c.new(0.6,0.6,0.6)*0.696, REFR));    // Glas2
+end;
+
 
 function intersect(const r:RayRecord;var t:real; var id:integer):boolean;
 var 
@@ -344,7 +409,7 @@ var
   Ray2,RefRay:RayRecord;
   nc,nt,nnt,ddn,cos2t,q,a,b,c,R0,Re,RP,Tr,TP:real;
   tDir:Vec3;
-  EL,sw,su,sv,l,tw,tu,tv:Vec3;
+  EL,sw,su,sv,l,tw,tv:Vec3;
   cos_a_max,eps1,eps2,eps2s,cos_a,sin_a,phi,omega:real;
   cl,cf:Vec3;
 begin
@@ -401,11 +466,10 @@ begin
             (*半球内部なら乱反射した寄与全てを取ればよい・・はず*)
             eps1:=M_2PI*random;eps2:=random;eps2s:=sqrt(eps2);
             sincos(eps1,ss,cc);
-            tu:=u*(cc*eps2s);tu:=tu+v*(ss*eps2s);tu:=tu+w*sqrt(1-eps2);
-            l:=tu.norm;
-             if intersect(Ray2.new(x,l),t,id) then begin
+            l:=(u*(cc*eps2s)+v*(ss*eps2s)+w*sqrt(1-eps2)).norm;
+            if intersect(Ray2.new(x,l),t,id) then begin
                 if id=i then begin
-                   tr:=l*nl;
+                   tr:=l*nl;if tr<0 then tr:=0;
                    EL:=EL+f.mult(s.e*tr);
                 end;
              end;
@@ -462,16 +526,13 @@ end;
 
 
 VAR
-  x,y,sx,sy,i,s: INTEGER;
+  x,y,sx,sy,s: INTEGER;
   w,h,samps,height    : INTEGER;
-  temp,d       : Vec3;
-  r1,r2,dx,dy  : real;
-  cam,tempRay  : RayRecord;
-  cx,cy: Vec3;
+  temp       : Vec3;
+  tempRay  : RayRecord;
   tColor,r,camPosition,camDirection : Vec3;
-
+  cam:CamRecord;
   BMP:BMPRecord;
-  ScrWidth,ScrHeight:integer;
   vColor:rgbColor;
   ArgInt:integer;
   FN,ArgFN:string;
@@ -509,20 +570,13 @@ BEGIN
   until c=endofoptions;
   height:=h;
   BMP.new(w,h);
-  InitNEScene;
+  SkyScene;
   Randomize;
 
-  camPosition.new(50, 52, 295.6);
-  camDirection.new(0, -0.042612, -1);
-  camDirection:=camDirection.norm;
-  cam.new(camPosition, camDirection);
-  cx.new(w * 0.5135 / h, 0, 0);
-  cy:= cx/ cam.d;
-  cy:= cy.norm;
-  cy:= cy* 0.5135;
 
-  ScrWidth:=0;
-  ScrHeight:=0;
+  cam.new( camPosition.new(50, 52, 295.6),
+           camDirection.new(0, -0.042612, -1).norm,
+           w,h);
   Writeln ('The time is : ',TimeToStr(Time));
 
   FOR y := 0 to h-1 DO BEGIN
@@ -533,27 +587,7 @@ BEGIN
       FOR sy := 0 TO 1 DO BEGIN
         FOR sx := 0 TO 1 DO BEGIN
           FOR s := 0 TO samps - 1 DO BEGIN
-            r1 := 2 * random;
-            IF (r1 < 1) THEN
-              dx := sqrt(r1) - 1
-            ELSE
-              dx := 1 - sqrt(2 - r1);
-
-            r2 := 2 * random;
-            IF (r2 < 1) THEN
-              dy := sqrt(r2) - 1
-            ELSE
-              dy := 1 - sqrt(2 - r2);
-
-            temp:= cx* (((sx + 0.5 + dx) / 2 + x) / w - 0.5);
-            d:= cy* (((sy + 0.5 + dy) / 2 + (h - y - 1)) / h - 0.5);
-            d:= d +temp;
-            d:= d +cam.d;
-
-            d:=d.norm;
-            tempRay.o:= d* 140+cam.o;
-            tempRay.d := d;
-            temp:=Radiance_ne_rev(tempRay, 0,1);
+            temp:=radiance_ne(cam.GetRay(x,y,sx,sy), 0,1);
             temp:= temp/ samps;
             r:= r+temp;
           END;(*samps*)
