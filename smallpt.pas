@@ -23,7 +23,6 @@ type
     w,h:integer;
     cx,cy:Vec3;
     function new(o_,d_:Vec3;w_,h_:integer):CamRecord;
-    function GetRay(x,y,sx,sy:integer):RayRecord;
   end;
    
 
@@ -35,29 +34,6 @@ begin
 
   result:=self;
 
-end;
-
-function CamRecord.GetRay(x,y,sx,sy:integer):RayRecord;
-var
-   r1,r2,dx,dy,temp:real;
-   dirct:Vec3;
-begin
-   r1 := 2 * random;
-   if (r1 < 1) then
-      dx := sqrt(r1) - 1
-   else
-      dx := 1 - sqrt(2 - r1);
-   r2 := 2 * random;
-   if (r2 < 1) then
-      dy := sqrt(r2) - 1
-   else
-      dy := 1 - sqrt(2 - r2);
-   dirct:= cy* (((sy + 0.5 + dy) / 2 + (h - y - 1)) / h - 0.5)
-      +cx* (((sx + 0.5 + dx) / 2 + x) / w - 0.5)
-      +d;
-   dirct:=dirct.norm;
-   result.o:= dirct* 140+o;
-   result.d := dirct;
 end;
 
 constructor SphereClass.Create(rad_:real;p_,e_,c_:Vec3;refl_:RefType);
@@ -203,12 +179,10 @@ end;
 var
   x,y,sx,sy,s: integer;
   w,h,samps: integer;
-  temp       : Vec3;
   cam:CamRecord;
   tColor,r,camPosition,camDirection : Vec3;
 
   BMP:BMPRecord;
-  vColor:rgbColor;
   ArgInt:integer;
   FN,ArgFN:string;
   c:char;
@@ -221,14 +195,13 @@ begin
   w:=1024 ;h:=768;  samps := 16;
   c:=#0;
   repeat
-    c:=getopt('o:s:w:');
+    c:=getopt('ho:s:w:');
 
     case c of
       'o' : begin
          ArgFN:=OptArg;
          if ArgFN<>'' then FN:=ArgFN;
-         writeln ('Output FileName =',FN);
-      end;
+       end;
       's' : begin
         ArgInt:=StrToInt(OptArg);
         samps:=ArgInt;
@@ -239,14 +212,17 @@ begin
          w:=ArgInt;h:=w *3 div 4;
          writeln('w=',w,' ,h=',h);
       end;
-      '?',':' : begin
+      '?','h' : begin
          writeln(' -o [finename] output filename');
          writeln(' -s [samps] sampling count');
          writeln(' -w [width] screen width pixel');
+         halt;
       end;
     end; { case }
   until c=endofoptions;
 
+  writeln('sample=',samps);
+  writeln('output file=',FN);
   BMP.new(w,h);
   InitScene;
   Randomize;
@@ -259,10 +235,10 @@ begin
   for y := 0 to h-1 do begin
     if y mod 10 =0 then writeln('y=',y);
     for x := 0 to w - 1 do begin
-      r:=ZeroVec;
       tColor:=ZeroVec;
       for sy := 0 to 1 do begin
         for sx := 0 to 1 do begin
+          r:=ZeroVec;
           for s := 0 to samps - 1 do begin
             r1 := 2 * random;
             if (r1 < 1) then dx := sqrt(r1) - 1 else dx := 1 - sqrt(2 - r1);
@@ -277,13 +253,10 @@ begin
 
             r:=r+Radiance(ray2, 0)/samps;
           end;(*samps*)
-          temp:= ClampVector(r)* 0.25;
-          tColor:=tColor+ temp;
-          r:=ZeroVec;
-        end;(*sx*)
+          tColor:=tColor+ ClampVector(r)* 0.25;
+         end;(*sx*)
       end;(*sy*)
-      vColor:=ColToRGB(tColor);
-      BMP.SetPixel(x,h-y,vColor);
+      BMP.SetPixel(x,h-y,ColToRGB(tColor));
     end;(* for x *)
   end;(*for y*)
   writeln ('The time is : ',TimeToStr(Time));
