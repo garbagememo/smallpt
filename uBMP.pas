@@ -35,7 +35,7 @@ begin
    cmap_entries := 0;
    headersize:=14+40;
    bfsize:=headersize+longint(x*y)*3;
-   bmpBodySize:=bfSize;
+   bmpBodySize:=(x*y)*3;
    for i:=0 to 14-1 do bmpfileheader[i]:=0;
    for i:=0 to 40-1 do bmpinfoheader[i]:=0;
 
