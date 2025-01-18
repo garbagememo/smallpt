@@ -256,9 +256,9 @@ begin
           tColor:=tColor+ ClampVector(r)* 0.25;
          end;(*sx*)
       end;(*sy*)
-      BMP.SetPixel(x,h-y,ColToRGB(tColor));
+      BMP.SetPixel(x,h-y-1,ColToRGB(tColor));
     end;(* for x *)
   end;(*for y*)
   writeln ('The time is : ',TimeToStr(Time));
-  BMP.WriteBMPFile(FN);
+  if UpperCase(ExtractFileExt(FN))='.BMP' then  BMP.WriteBMPFile(FN) else BMP.WritePPM(FN);
 end.
