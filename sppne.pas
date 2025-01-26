@@ -1,4 +1,4 @@
-program smallpt;
+program smallptNextEvent;
 {$MODE objfpc}{$H+}
 {$INLINE ON}
 {$modeswitch advancedrecords}
@@ -570,7 +570,7 @@ begin
   until c=endofoptions;
   height:=h;
   BMP.new(w,h);
-  SkyScene;
+  initNEScene;
   Randomize;
 
 
@@ -601,5 +601,10 @@ begin
     end;(* for x *)
   end;(*for y*)
   writeln ('The time is : ',TimeToStr(Time));
-  BMP.WriteBMPFile(FN);
+  if UpperCase(ExtractFileExt(FN))='.BMP' then
+    BMP.WriteBMPFile(FN)
+  else if UpperCase(ExtractFileExt(FN))='.PNG' then
+    BMP.WritePNG(FN)
+  else
+    BMP.WritePPM(FN);
 end.
