@@ -15,7 +15,7 @@ type
       BMPWidth,BMPHeight:longint;
       bmpfileheader : packed array[0..14-1] of byte;
       bmpinfoheader : packed array[0..40-1] of byte;
-      bmpBody:array[0..MaxArrayNum*3]of byte; //dynamic arrayにするとBlockwriteが動かない（ポインタだから）
+      bmpBody:array of byte;
       procedure new(x,y:integer);
       procedure SetPixel(x,y:integer;col:rgbColor);
       procedure WriteBMPFile(FN:string);
@@ -36,6 +36,7 @@ begin
    headersize:=14+40;
    bfsize:=headersize+longint(x*y)*3;
    bmpBodySize:=longint(x*y)*3;
+   SetLength(bmpBody,bmpBodySize);
    for i:=0 to 14-1 do bmpfileheader[i]:=0;
    for i:=0 to 40-1 do bmpinfoheader[i]:=0;
 
@@ -97,7 +98,7 @@ begin
    Assign(B,FN);rewrite(B,1);
    BlockWrite(B,bmpfileheader,14);
    Blockwrite(B,bmpInfoheader,40);
-   blockwrite(b,bmpBody,bmpBodySize);
+   blockwrite(b,bmpBody[0],bmpBodySize);
    Close(b);
 end;
 
