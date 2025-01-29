@@ -13,4 +13,4 @@
 
 ## FreePascalのDynamicArrayのBlockwriteについて  
 FreePascalのDynamicArrayは実態はポインタなのでBlockwriteではBlockwrite(f,DynamicArray,len)ではだめで  
-> blockwrite(f,DynamicArray[0],len)が正解
+blockwrite(f,DynamicArray[0],len)が正解
