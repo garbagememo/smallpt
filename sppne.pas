@@ -314,29 +314,28 @@ begin
             continue;
           end;
           if (s.e.x<=0) and  (s.e.y<=0) and (s.e.z<=0)  then continue; // skip non-lights
-          sw:=s.p-x;
-          tr:=sw*sw;  tr:=s.rad*s.rad/tr;
-          if abs(sw.x)/sqrt(tr)>0.1 then 
-            su:=(su.new(0,1,0)/sw).norm 
-          else 
-            su:=(su.new(1,0,0)/sw).norm;
-          sv:=sw/su;
-          if tr>1 then begin
+          if (s.p-x).len<s.rad then begin
             (*半球の内外=cos_aがマイナスとsin_aが＋、－で場合分け*)
             (*半球内部なら乱反射した寄与全てを取ればよい・・はず*)
             eps1:=M_2PI*random;eps2:=random;eps2s:=sqrt(eps2);
             sincos(eps1,ss,cc);
-            tu:=u*(cc*eps2s);tu:=tu+v*(ss*eps2s);tu:=tu+w*sqrt(1-eps2);
-            l:=tu.norm;
-             if intersect(Ray2.new(x,l),t,id) then begin
+            l:=(u*(cc*eps2s)+v*(ss*eps2s)+w*sqrt(1-eps2) ).norm;
+            if intersect(Ray2.new(x,l),t,id) then begin
                 if id=i then begin
                    tr:=l*nl;
+                   if tr<0 then tr:=0;
                    EL:=EL+f.mult(s.e*tr);
                 end;
              end;
           end
           else begin //半球外部の場合;
-            cos_a_max := sqrt(1-tr );
+            sw:=(s.p-x).norm;
+            if abs(sw.x)>0.1 then 
+              su:=(su.new(0,1,0)/sw).norm 
+            else 
+              su:=(su.new(1,0,0)/sw).norm;
+            sv:=sw/su;
+            cos_a_max := sqrt(1-s.rad*s.rad/(s.p-x).dot(s.p-x) );
             eps1 := random; eps2:=random;
             cos_a := 1-eps1+eps1*cos_a_max;
             sin_a := sqrt(1-cos_a*cos_a);
@@ -454,14 +453,7 @@ begin
             continue;
           end;
           if (s.e.x<=0) and  (s.e.y<=0) and (s.e.z<=0)  then continue; // skip non-lights
-          sw:=s.p-x;
-          tr:=sw*sw;  tr:=s.rad*s.rad/tr;
-          if abs(sw.x)/sqrt(tr)>0.1 then 
-            su:=(su.new(0,1,0)/sw).norm 
-          else 
-            su:=(su.new(1,0,0)/sw).norm;
-          sv:=sw/su;
-          if tr>1 then begin
+          if (s.p-x).len<s.rad then begin
             (*半球の内外=cos_aがマイナスとsin_aが＋、－で場合分け*)
             (*半球内部なら乱反射した寄与全てを取ればよい・・はず*)
             eps1:=M_2PI*random;eps2:=random;eps2s:=sqrt(eps2);
@@ -475,7 +467,13 @@ begin
              end;
           end
           else begin //半球外部の場合;
-            cos_a_max := sqrt(1-tr );
+            sw:=(s.p-x).norm;
+            if abs(sw.x)>0.1 then 
+              su:=(su.new(0,1,0)/sw).norm 
+            else 
+              su:=(su.new(1,0,0)/sw).norm;
+            sv:=sw/su;
+            cos_a_max := sqrt(1-s.rad*s.rad/(s.p-x).dot(s.p-x) );
             eps1 := random; eps2:=random;
             cos_a := 1-eps1+eps1*cos_a_max;
             sin_a := sqrt(1-cos_a*cos_a);
