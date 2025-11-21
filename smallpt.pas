@@ -116,12 +116,7 @@ begin
   obj:=SphereClass(sph[id]);
   x:=r.o+r.d*t; n:=(x-obj.p).norm; f:=obj.c;
   if n.dot(r.d)<0 then nl:=n else nl:=n*-1;
-  if (f.x>f.y)and(f.x>f.z) then
-    p:=f.x
-  else if f.y>f.z then 
-    p:=f.y
-  else
-    p:=f.z;
+  p:=Max(f.x,Max(f.y,f.z));
    if (depth>5) then begin
     if random<p then 
       f:=f/p 
