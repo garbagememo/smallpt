@@ -120,10 +120,8 @@ begin
    if (depth>5) then begin
     if random<p then 
       f:=f/p 
-    else begin
-      result:=obj.e;
-      exit;
-    end;
+    else 
+      Exit(obj.e);
   end;
   case obj.refl of
     DIFF:begin
