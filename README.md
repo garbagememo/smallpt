@@ -13,4 +13,9 @@
 
 ## FreePascalのDynamicArrayのBlockwriteについて  
 FreePascalのDynamicArrayは実態はポインタなのでBlockwriteではBlockwrite(f,DynamicArray,len)ではだめで  
-blockwrite(f,DynamicArray[0],len)が正解
+blockwrite(f,DynamicArray[0],len)が正解  
+
+## FPImageのColors配列で使うFPColorについて  
+FreePascalのFPImageユニットで用いる myImage := TFPMemoryImage.Create(width, height)においてメモリ中のデータをアクセスするには  
+myImage.colors[x,y]:=FPColor(r,g,b)  
+とするが、FPcolorに与える引数はWordなので最大値は65535である事に注意。255ではない。
