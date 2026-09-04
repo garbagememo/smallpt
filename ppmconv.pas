@@ -11,9 +11,9 @@ begin
   if paramcount<1 then exit;
   st:=ParamStr(1);
   if UpperCase(ExtractFileExt(st))='.PPM' then begin
-    BMP.LoadPPM(st);
+    BMP.ReadFile(st);
     delete(st,length(st)-3,4);
-    BMP.WritePNG(ExtractFileName(st)+'.png');
+    BMP.WriteFile(ExtractFileName(st)+'.png');
   end;
 end.
   

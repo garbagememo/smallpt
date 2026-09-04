@@ -1,170 +1,150 @@
 unit uBMP;
 {$MODE objfpc}{$H+}
 {$modeswitch advancedrecords}
+{$codepage utf8} // ← これを追加！
 interface
-uses classes,SysUtils,FPImage, FPWritePNG;
+uses
+   classes,SysUtils,math,FPImage,
+   FPWritePNM,FPWritePNG,FPWriteBMP,
+   FPReadPNG,FPReadJPEG,FPReadPNM,FPReadBMP;
 
-const
-    MaxArrayNum=1024*1024*2*2;
 type
-    rgbColor=record b,g,r:byte; end;
+   rgbColor = record
+      r,g,b:word;
+   end;
 
-    BMPArray=array of byte;
-    BMPRecord=record
+   BMPArray = array of rgbColor;
+   BMPRecord=record
       bmpBodySize:longint;
       BMPWidth,BMPHeight:longint;
-      bmpfileheader : packed array[0..14-1] of byte;
-      bmpinfoheader : packed array[0..40-1] of byte;
-      bmpBody:array of byte;
+
+      bmpBody:BMPArray;
       procedure new(x,y:integer);
       procedure SetPixel(x,y:integer;col:rgbColor);
-      procedure WriteBMPFile(FN:string);
-      procedure WritePPM(FN:String);
-      procedure WritePNG(FN:String);
-      procedure LoadPPM(FN:String);
-    end;
+      function GetPixel(x,y:integer):rgbColor;
+      
+      // 自動判定用の統一書き出しメソッド
+      procedure WriteFile(FN: string);
+      
+      // 統一読み込みメソッド
+      procedure ReadFile(FN:String);
+   end;
+
 implementation
+
 procedure BMPRecord.new(x,y:longint);
-var
-  headersize, bfSize : longint;
-  bits_per_pixel, cmap_entries : integer;
-  i:integer;
 begin
+   Setlength(BMPBody,x*y);
    BMPWidth:=x;BMPHeight:=y;
-   bits_per_pixel := 24;
-   cmap_entries := 0;
-   headersize:=14+40;
-   bfsize:=headersize+longint(x*y)*3;
-   bmpBodySize:=longint(x*y)*3;
-   SetLength(bmpBody,bmpBodySize);
-   for i:=0 to 14-1 do bmpfileheader[i]:=0;
-   for i:=0 to 40-1 do bmpinfoheader[i]:=0;
-
-  { Fill the file header }
-   bmpfileheader[0] := $42;	{ first 2 bytes are ASCII 'B', 'M' }
-   bmpfileheader[1] := $4D;
-  {PUT_4B(bmpfileheader, 2, bfSize);} { bfSize }
-   bmpfileheader[2] := byte ((bfSize) and $FF);
-   bmpfileheader[2+1] := byte (((bfSize) shr 8) and $FF);
-   bmpfileheader[2+2] := byte (((bfSize) shr 16) and $FF);
-   bmpfileheader[2+3] := byte (((bfSize) shr 24) and $FF);
-  { we leave bfReserved1 & bfReserved2 = 0 }
-  {PUT_4B(bmpfileheader, 10, headersize);} { bfOffBits }
-   bmpfileheader[10] := byte (headersize and $FF);
-   bmpfileheader[10+1] := byte ((headersize shr 8) and $FF);
-   bmpfileheader[10+2] := byte ((headersize shr 16) and $FF);
-   bmpfileheader[10+3] := byte ((headersize shr 24) and $FF);
-
-  { Fill the info header (Microsoft calls this a BITMAPINFOHEADER) }
-  {PUT_2B(bmpinfoheader, 0, 40);}   { biSize }
-   bmpinfoheader[0] := byte ((40) and $FF);
-   bmpinfoheader[0+1] := byte (((40) shr 8) and $FF);
-
-  {PUT_4B(bmpinfoheader, 4, cinfo^.output_width);} { biWidth }
-   bmpinfoheader[4] := byte ((x) and $FF);
-   bmpinfoheader[4+1] := byte ((x shr 8) and $FF);
-   bmpinfoheader[4+2] := byte ((x shr 16) and $FF);
-   bmpinfoheader[4+3] := byte ((x shr 24) and $FF);
-  {PUT_4B(bmpinfoheader, 8, cinfo^.output_height);} { biHeight }
-   bmpinfoheader[8] := byte (y and $FF);
-   bmpinfoheader[8+1] := byte ((y shr 8) and $FF);
-   bmpinfoheader[8+2] := byte ((y shr 16) and $FF);
-   bmpinfoheader[8+3] := byte ((y shr 24) and $FF);
-  {PUT_2B(bmpinfoheader, 12, 1);}	{ biPlanes - must be 1 }
-   bmpinfoheader[12] := byte (1 and $FF);
-   bmpinfoheader[12+1] := byte ((1 shr 8) and $FF);
-
-  {PUT_2B(bmpinfoheader, 14, bits_per_pixel);} { biBitCount }
-   bmpinfoheader[14] := byte (bits_per_pixel and $FF);
-   bmpinfoheader[14+1] := byte ((bits_per_pixel shr 8) and $FF);
-  { we leave biCompression = 0, for none }
-  { we leave biSizeImage = 0; this is correct for uncompressed data }
-  { we leave biClrImportant := 0 }
-
+   bmpBodySize:=length(BMPBody)*sizeof(rgbColor);
 end;
 
 procedure BMPRecord.SetPixel(x,y:integer;col:rgbColor);
 begin
-   bmpBody[(y*BMPWidth+x)*3  ]:=col.b;
-   bmpBody[(y*BMPWidth+x)*3+1]:=col.g;
-   bmpBody[(y*BMPWidth+x)*3+2]:=col.r;
-
+   bmpBody[y*BMPWidth+x]:=col;
 end;
 
-procedure BMPRecord.WriteBMPFile(FN:string);
-var
-   B : file;
+function BMPRecord.GetPixel(x,y:integer):rgbColor;
 begin
-   Assign(B,FN);rewrite(B,1);
-   BlockWrite(B,bmpfileheader,14);
-   Blockwrite(B,bmpInfoheader,40);
-   blockwrite(b,bmpBody[0],bmpBodySize);
-   Close(b);
+   result:=bmpBody[y*BMPWidth+x];
 end;
 
-procedure BMPRecord.WritePPM(FN:string);
+// ----------------------------------------------------
+// 拡張子から判別して自動で適切な出力を行うメソッド
+// ----------------------------------------------------
+procedure BMPRecord.WriteFile(FN: string);
 var
-   f:text;
+   image:TFPMemoryImage;
+   Ext: String;
+   Writer: TFPCustomImageWriter;
    x,y:integer;
 begin
-   assign(f,FN);rewrite(f);
-   SetTextLineEnding(f,#10);
-   writeln(f, 'P3');
-   writeln(f,bmpWidth,' ',bmpHeight);
-   writeln(f,255);
-   for y:=bmpHeight-1 downto 0 do begin
-      for x:=0 to bmpWidth-1 do begin
-        writeln(f,bmpBody[(y*bmpWidth+x)*3+2],' ',
-                bmpBody[(y*bmpWidth+x)*3+1],' ',
-                bmpBody[(y*bmpWidth+x)*3]);
-      end;
+   image := TFPMemoryImage.Create (bmpWidth,bmpHeight);
+   for y:=0 to bmpHeight-1 do
+      for x:=0 to bmpWidth-1 do 
+         image.colors[x,bmpHeight-y-1]:=FPColor(bmpBody[y*bmpWidth+x].r, 
+                                                bmpBody[y*bmpWidth+x].g, 
+                                                bmpBody[y*bmpWidth+x].b);
+   
+   Ext := LowerCase(ExtractFileExt(FN));
+   Writer := nil;
+
+   // 拡張子判定でライターを選択
+   if (Ext = '.ppm') or (Ext = '.pnm') then begin
+      Writer := TFPWriterPNM.Create;
+      TFPWriterPNM(Writer).BinaryFormat := false;
+   end
+   else if Ext = '.png' then begin
+      Writer := TFPWriterPNG.Create;
+      TFPWriterPNG(Writer).WordSized:=false;
+   end
+   else if Ext = '.bmp' then begin
+      Writer := TFPWriterBMP.Create;
+   end
+   else begin
+      WriteLn('未対応の拡張子のためファイル名をout.pngに ');
+      FN:='out.png';
+      Writer := TFPWriterPNG.Create;
+      TFPWriterPNG(Writer).WordSized:=false;
    end;
-   close(f);
+
+   try
+      WriteLn('保存中: ', FN, ' (フォーマット: ', UpperCase(Copy(Ext, 2, Length(Ext))), ')');
+      Image.SaveToFile(FN, Writer);
+      WriteLn('保存が完了しました。');
+   finally
+      Writer.Free;
+   end;
 end;
 
-procedure BMPRecord.WritePNG(FN:string);
+
+procedure BMPRecord.ReadFile(FN:string);
 var
-    image : TFPCustomImage;
-    writer : TFPWriterPNG;
-    x,y:integer;
+   Ext:string;
+   myImage: TFPMemoryImage;
+   reader : TFPCustomImageReader;
+   x,y:integer;
 begin
-  image := TFPMemoryImage.Create (bmpWidth,bmpHeight);
-  Writer := TFPWriterPNG.Create;
-  Writer.WordSized:=false;
-  for y:=0 to bmpHeight-1 do
-    for x:=0 to bmpWidth-1 do 
-      image.colors[x,bmpHeight-y-1]
-        :=FPColor(bmpBody[(y*bmpWidth+x)*3+2]*255,
-                  bmpBody[(y*bmpWidth+x)*3+1]*255,
-                  bmpBody[(y*bmpWidth+x)*3  ]*255);
-  image.SaveToFile (FN, writer);
-  image.Free;
-  writer.Free;
+   myImage := TFPMemoryImage.Create(0, 0);
+   Ext := LowerCase(ExtractFileExt(FN));
+   reader := nil;
+
+   // 拡張子判定でリーダーを選択
+   if Ext='.ppm' then begin
+      reader:=TFPReaderPNM.Create;
+   end
+   else if Ext = '.png' then begin
+      reader := TFPReaderPNG.Create;
+   end
+   else if Ext='.jpg' then begin
+      reader:=TFPReaderJPEG.Create;
+   end
+   else if Ext = '.bmp' then
+      reader := TFPReaderBMP.Create
+   else
+   begin
+      WriteLn('未対応の拡張子のため中止 ');
+      Halt(0);
+   end;
+   try
+      myImage.LoadFromFile(FN, reader);
+      self.new(myImage.width,myImage.height);
+      for y:=0 to MyImage.Height-1 do begin
+         for x:=0 to myImage.width-1 do begin
+            bmpBody[(y*bmpWidth+x)].r:=myImage.colors[x,bmpHeight-y-1].red;
+            bmpBody[(y*bmpWidth+x)].g:=myImage.colors[x,bmpHeight-y-1].Green;
+            bmpBody[(y*bmpWidth+x)].b:=myImage.colors[x,bmpHeight-y-1].Blue;
+         end;
+      end;
+   except
+      on E: Exception do
+         WriteLn('Error loading file: ', E.Message);
+   end;
+
+   reader.Free;
+   myImage.Free;
 end;
 
-procedure BMPRecord.LoadPPM(FN:string);
-var
-  f:text;
-  w,h,bd,x,y:integer;
-  r,g,b:byte;
-  st:string;
-  suf:integer;
-begin
-  assign(f,FN);reset(f);
-  readln(f,st);if st<>'P3' then begin close(f);exit;end;
-  readln(f,w,h);
-  new(w,h);
-  readln(f,bd);
-  for y:=0 to h-1 do begin
-    for x:=0 to w-1 do begin
-      readln(f,r,g,b);
-      suf:=( (h-y-1)*bmpWidth+x)*3;
-      bmpBody[suf+2]:=r;
-      bmpBody[suf+1]:=g;
-      bmpBody[suf  ]:=b;
-    end;
-  end;
-end;
 
 begin
 end.

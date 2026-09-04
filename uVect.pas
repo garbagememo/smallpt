@@ -2,72 +2,95 @@ unit uVect;
 {$MODE objfpc}{$H+}
 {$INLINE ON}
 {$modeswitch advancedrecords}
+{$codepage utf8} // ← これを追加！
 
 interface
 
 uses
-    sysutils,uBMP,math;
+   {$ifdef unix}
+   cwstring, // ← Linux/Unix環境でUTF-8(System/WideString)を正しく扱うために必須
+   {$endif}
+   sysutils,uBMP,math;
+
+const
+   MAX_WORD = High(WORD);
+   rev_max_word= 1/MAX_WORD;
+   eps=1e-4;
+   INF=1e20;
+
 type
-    RefType=(DIFF,SPEC,REFR);// material types, used in radiance()
-{
-	DIFFUSE,    // 完全拡散面。いわゆるLambertian面。
-	SPECULAR,   // 理想的な鏡面。
-	REFRACTION, // 理想的なガラス的物質。
-}
-    Vec3=record
-        x,y,z:real;
-        function new(x_,y_,z_:real):Vec3;
-        function Norm:Vec3;inline;
-        function len:real;inline;
-        function Dot(const V2 :Vec3):real;inline;//内積
-        function Cross(const V2 :Vec3):Vec3;inline;//外積
-        function Mult(const V2:Vec3):Vec3;inline;
-        function Neg:Vec3;
-    end;
-    RayRecord=record
-       o, d:Vec3;
-       function new(o_,d_:Vec3):RayRecord;
-      end;
+   Vec3=record
+      x,y,z:real;
+      class function new(x_,y_,z_:real):Vec3;static;inline;
+      function Norm:Vec3;inline;
+      function len:real;inline;
+      function Dot(const V2 :Vec3):real;inline;//内積
+      function Cross(const V2 :Vec3):Vec3;inline;//外積
+      function Mult(const V2:Vec3):Vec3;inline;
+      function Neg:Vec3;
+      class operator * (const v1: Vec3; const r: real): Vec3; inline;
+      class operator / (const v1: Vec3; const r: real): Vec3; inline;
+      class operator * (const v1, v2: Vec3): real; inline; // 内積
+      class operator / (const v1, v2: Vec3): Vec3; inline; // 外積
+      class operator + (const v1, v2: Vec3): Vec3; inline;
+      class operator - (const v1, v2: Vec3): Vec3; inline;
+      class operator + (const v1: Vec3; const r: real): Vec3; inline;
+      class operator - (const v1: Vec3; const r: real): Vec3; inline;
+      property r: Real read x write x;
+      property g: Real read y write y;
+      property b: Real read z write z;
+   end;
+   
+   RayRecord=record
+      o, d:Vec3;
+      class function new(o_,d_:Vec3):RayRecord;static;
+   end;
+    
+   CamRecord=record
+      o,d:Vec3;
+      PlaneDist:real;
+      w,h,samps:integer;
+      cx,cy:Vec3;
+      class function new(o_,d_:Vec3;w_,h_,samps_:integer):CamRecord;static;
+      function GetRay(x,y,sx,sy:integer):RayRecord;
+      procedure CamWrite;
+   end;
 
-  InterRecord=record
-     isHit:boolean;
-     t:real;
-     id:integer;
-  end;
-
+   Vec2=record
+      u,v:real;
+      function DirToUV(d:Vec3):Vec2;
+   end;
+      
    function ClampVector(v:Vec3):Vec3;
    function ColToRGB(v:Vec3):rgbColor;
+   function RGBtoColor(c:rgbColor):Vec3;inline;
 const
    BackGroundColor:Vec3 = (x:0;y:0;z:0);
    ZeroVec:Vec3 = (x:0;y:0;z:0);
-   
+   INFVec:Vec3=(x:INF*2;y:INF*2;z:INF*2);
+   DefaultPosition:Vec3=(x:50.0; y:52.0; z:295.6);
+   DefaultDirection:Vec3=(x:0.0; y:-0.042612; z:-1.0);
 
 function VecAdd3(V1,V2,V3:Vec3):Vec3;
 procedure VecWriteln(V:Vec3);
-
-operator * (const v1:Vec3;const r:real)v:Vec3;inline;
-operator / (const v1:Vec3;const r:real)v:Vec3;inline;
-operator * (const v1,v2:Vec3)r:real;inline;//内積
-operator / (const v1,v2:Vec3)v:Vec3;inline;//外積
-
-operator + (const v1,v2:Vec3)v:Vec3;inline;
-operator - (const v1,v2:Vec3)v:Vec3;inline;
-operator + (const v1:Vec3;const r:real)v:Vec3;inline;
-operator - (const v1:Vec3;const r:real)v:Vec3;inline;
+procedure WriteVec(v:Vec3);
+function isINF(v:Vec3):boolean;
 
 implementation
 
-function Vec3.new(x_,y_,z_:real):Vec3;inline;
+function isINF(v:Vec3):boolean;
 begin
-   x:=x_;y:=y_;z:=z_;
-   result:=self;
+   if (v.x>INF) and (v.y>INF) and (v.z>INF) then result := true else result:=false;
+end;
+
+class function Vec3.new(x_,y_,z_:real):Vec3;static;inline;
+begin
+   result.x:=x_;result.y:=y_;result.z:=z_;
 end;
 
 function Vec3.Norm:Vec3;inline;
-var
-   l:real;
 begin
-   result:=self/len;
+   result:=self/sqrt(x*x+y*y+z*z);
 end;
 
 function Vec3.len:real;inline;
@@ -101,105 +124,177 @@ begin
     result.z:=-z;
 end;
 
-function RayRecord.new(o_,d_:Vec3):RayRecord;
+class function RayRecord.new(o_,d_:Vec3):RayRecord;
 begin
-   o:=o_;
-   d:=d_;
-   result:=self;
-end;
+   result.o:=o_;
+   result.d:=d_;
+ end;
 
 function VecAdd3(V1,V2,V3:Vec3):Vec3;
 begin
     result.x:=V1.x+V2.x+V3.x;
     result.y:=V1.y+V2.y+V3.y;
     result.z:=V1.z+V2.z+V3.z;
-    
 end;
 
 procedure VecWriteln(V:Vec3);
 begin
-    writeln(v.x,':',v.y,':',v.z);
+    writeln(v.x:7:3,':',v.y:7:3,':',v.z:7:3);
 end;
 
-
-operator * (const v1:Vec3;const r:real)v:Vec3;inline;
+procedure WriteVec(v:Vec3);
 begin
-   v.x:=v1.x*r;
-   v.y:=v1.y*r;
-   v.z:=v1.z*r;
+   write('(',v.x:7:3,':',v.y:7:3,':',v.z:7:3,')');
 end;
 
-operator / (const v1:Vec3;const r:real)v:Vec3;inline;
+class operator Vec3.* (const v1: Vec3; const r: real): Vec3; inline;
 begin
-   v.x:=v1.x/r;
-   v.y:=v1.y/r;
-   v.z:=v1.z/r;
+   result.x := v1.x * r;
+   result.y := v1.y * r;
+   result.z := v1.z * r;
 end;
 
-operator * (const v1,v2:Vec3)r:real;inline;//内積
+class operator Vec3./ (const v1: Vec3; const r: real): Vec3; inline;
 begin
-   r:=v1.x*v2.x+v1.y*v2.y+v1.z*v2.z;
+   result.x := v1.x / r;
+   result.y := v1.y / r;
+   result.z := v1.z / r;
 end;
 
-operator / (const v1,v2:Vec3)v:Vec3;inline; //外積
+class operator Vec3.* (const v1, v2: Vec3): real; inline; // 内積
 begin
-    v.x:=V1.y * v2.z - v2.y * V1.z;
-    v.y:=V1.z * v2.x - v2.z * V1.x;
-    v.z:=V1.x * v2.y - v2.x * V1.y;
+   result := v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
 end;
 
-operator + (const v1,v2:Vec3)v:Vec3;inline;
+class operator Vec3./ (const v1, v2: Vec3): Vec3; inline; // 外積
 begin
-   v.x:=v1.x+v2.x;
-   v.y:=v1.y+v2.y;
-   v.z:=v1.z+v2.z;
+   result.x := v1.y * v2.z - v2.y * v1.z;
+   result.y := v1.z * v2.x - v2.z * v1.x;
+   result.z := v1.x * v2.y - v2.x * v1.y;
 end;
 
-operator - (const v1,v2:Vec3)v:Vec3;inline;
+class operator Vec3.+ (const v1, v2: Vec3): Vec3; inline;
 begin
-    v.x:=v1.x-v2.x;
-    v.y:=v1.y-v2.y;
-    v.z:=v1.z-v2.z;
+   result.x := v1.x + v2.x;
+   result.y := v1.y + v2.y;
+   result.z := v1.z + v2.z;
 end;
 
-operator + (const v1:Vec3;const r:real)v:Vec3;inline;
+class operator Vec3.- (const v1, v2: Vec3): Vec3; inline;
 begin
-   v.x:=v1.x+r;
-   v.y:=v1.y+r;
-   v.z:=v1.z+r;
-end;
-operator - (const v1:Vec3;const r:real)v:Vec3;inline;
-begin
-    v.x:=v1.x-r;
-    v.y:=v1.y-r;
-    v.z:=v1.z-r;
+   result.x := v1.x - v2.x;
+   result.y := v1.y - v2.y;
+   result.z := v1.z - v2.z;
 end;
 
-
-function Clamp(x:real):real;inline;
+class operator Vec3.+ (const v1: Vec3; const r: real): Vec3; inline;
 begin
-   if x<0 then exit(0);
-   if x>1 then exit(1);
-   exit(x);
+   result.x := v1.x + r;
+   result.y := v1.y + r;
+   result.z := v1.z + r;
+end;
+
+class operator Vec3.- (const v1: Vec3; const r: real): Vec3; inline;
+begin
+   result.x := v1.x - r;
+   result.y := v1.y - r;
+   result.z := v1.z - r;
 end;
 
 function ClampVector(v:Vec3):Vec3;
 begin
-  result.x:=clamp(v.x);
-  result.y:=clamp(v.y);
-  result.z:=clamp(v.z);
-end;
-function ColToByte(x:real):byte;inline;
-begin
-    result:=trunc(power(x,1/2.2)*255+0.5);
-end;
-function ColToRGB(v:Vec3):rgbColor;
-begin
-    result.r:=ColToByte(v.x);
-    result.g:=ColToByte(v.y);
-    result.b:=ColToByte(v.z);
+  result.r:=EnsureRange(v.r,0,1);
+  result.g:=EnsureRange(v.g,0,1);
+  result.b:=EnsureRange(v.b,0,1);
 end;
 
+function ColToWord(x:real):Word;inline;
+begin
+    result:=trunc(power(x,1/2.2)* MAX_WORD +0.5);
+end;
+
+function ColToRGB(v:Vec3):rgbColor;
+begin
+    result.r:=ColToWord(v.r);
+    result.g:=ColToWord(v.g);
+    result.b:=ColToWord(v.b);
+end;
+
+function RGBtoColor(c:rgbColor):Vec3;inline;
+begin
+   result.r:=c.r*rev_MAX_WORD;
+   result.g:=c.g*rev_MAX_WORD;
+   result.b:=c.b*rev_MAX_WORD;
+end;
+
+class function CamRecord.new(o_,d_:Vec3;w_,h_,samps_:integer):CamRecord;
+begin
+   result.o:=o_;
+   result.d:=d_.norm;
+   result.w:=w_;
+   result.h:=h_;
+   result.samps:=samps_;
+   result.cx:=Vec3.new(result.w * 0.5135 / result.h, 0, 0);
+   result.cy:= (result.cx/ result.d).norm* 0.5135;
+   result.PlaneDist:=140;
+end;
+
+function CamRecord.GetRay(x,y,sx,sy:integer):RayRecord;
+var
+   r1,r2,dx,dy:real;
+   dirct:Vec3;
+begin
+   r1 := 2 * random;
+   if (r1 < 1) then
+      dx := sqrt(r1) - 1
+   else
+      dx := 1 - sqrt(2 - r1);
+   r2 := 2 * random;
+   if (r2 < 1) then
+      dy := sqrt(r2) - 1
+   else
+      dy := 1 - sqrt(2 - r2);
+   dirct:= cy* (((sy + 0.5 + dy) / 2 + (h - y - 1)) / h - 0.5)
+      +cx* (((sx + 0.5 + dx) / 2 + x) / w - 0.5)
+      +d;
+   dirct:=dirct.norm;
+   result.o:= dirct* PlaneDist+o;
+   result.d := dirct;
+end;
+
+procedure CamRecord.CamWrite;
+var
+   r:RayRecord;
+begin
+   write(' o=');VecWriteln(o);
+   write(' d=');VecWriteln(d);
+   write(' cx=');VecWriteln(cx);
+   write(' cy=');VecWriteln(cy);
+   writeln('===0,0==');
+   r:=GetRay(0,0,0,0);
+   write(' r.o=');VecWriteln(r.o);
+   write(' r.d=');VecWriteln(r.d);
+   writeln('===320,240==');
+   r:=GetRay(320,240,0,0);
+   write(' r.o=');VecWriteln(r.o);
+   write(' r.d=');VecWriteln(r.d);
+end;
+
+
+function Vec2.DirToUV(d:Vec3):Vec2;
+var
+  ClampedZ: Double;
+begin
+   d:=d.norm;
+   Result.U := 0.5 - (ArcTan2(d.z, d.x) / (2.0 * Pi));
+
+   // ArcSin に渡す値のクランプ (-1.0 ～ 1.0) で NaN を防止
+   ClampedZ := EnsureRange(d.y, -1.0, 1.0);
+   
+   // 下が V=0 の場合
+   Result.V := 0.5 + (ArcSin(ClampedZ) / Pi);
+end;
+  
 begin
 end.
    
