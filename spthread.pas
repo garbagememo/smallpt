@@ -362,7 +362,7 @@ begin
       ThreadAry[i].yInc:=ThreadNum;
 
       // ★ スレッドごとにユニークな初期シードを設定（0防止のため1を加算）
-      ThreadAry[i].RandState.create( Cardinal((i + 1) * 123456789 + GetTickCount) );
+      ThreadAry[i].RandState.create( Cardinal((i + 1) * 123456789 + GetTickCount64) );
    end;
    writeln('Setup!');
    
